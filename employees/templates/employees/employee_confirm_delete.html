@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 0 auto; text-align: center; margin-top: 50px;">
+    <h2>Delete Employee?</h2>
+    <p style="color: var(--muted); margin: 16px 0;">
+        Are you sure you want to permanently delete <strong>{{ object.first_name }} {{ object.last_name }}</strong>?
+    </p>
+    <form method="POST">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Yes, Delete</button>
+        <a href="{% url 'employee_list' %}" class="btn btn-ghost">Cancel</a>
+    </form>
+</div>
+{% endblock %}

@@ -8,6 +8,10 @@ class DepartmentAdmin(admin.ModelAdmin):
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    list_display = ("first_name", "last_name", "email", "department", "status")
+    list_display = ("first_name", "last_name", "email", "department", "status", "user")
     list_filter = ("department", "status")
     search_fields = ("first_name", "last_name", "email")
+    # Linking a login account to an employee is a privileged action, so it is
+    # done here in the admin (staff only), not in the public employee form.
+    autocomplete_fields = ("user",)
+    list_select_related = ("department", "user")

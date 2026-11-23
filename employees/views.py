@@ -1,22 +1,36 @@
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView, TemplateView
+from decimal import Decimal
+
+from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.db.models import Avg, Count, Q, Sum
+from django.http import Http404
+from django.shortcuts import redirect
 from django.urls import reverse_lazy
-from django.db.models import Q, Sum, Count, Avg
-from .models import Employee, Department
-from .forms import EmployeeForm, DepartmentForm
+from django.views import View
+from django.views.generic import (
+    CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView,
+)
+
+from .forms import DepartmentForm, EmployeeForm
+from .models import Department, Employee
+from .permissions import EmployeeScopeMixin, can_view_salary
+
+# Authentication ("are you logged in?") is enforced globally by
+# LoginRequiredMiddleware. Everything below is AUTHORIZATION:
+#   PermissionRequiredMixin -> may this user use this screen at all? (403)
+#   EmployeeScopeMixin      -> which employee rows may they touch?   (404)
 
 # ============ EMPLOYEE VIEWS ============
 
-class EmployeeListView(ListView):
-    model = Employee
+class EmployeeListView(PermissionRequiredMixin, EmployeeScopeMixin, ListView):
+    permission_required = "employees.view_employee"
     template_name = "employees/employee_list.html"
     context_object_name = "employees"
-    paginate_by = 10  # Built-in pagination (10 per page)
+    paginate_by = 10
 
     def get_queryset(self):
-        # Start with all employees, optimize the query using select_related
-        queryset = super().get_queryset().select_related('department').order_by('-date_hired', 'last_name')
-        
-        # Handle search
+        # Scoped (and select_related) queryset from EmployeeScopeMixin.
+        queryset = super().get_queryset().order_by('-date_hired', 'last_name')
+
         query = self.request.GET.get('q')
         if query:
             queryset = queryset.filter(
@@ -27,36 +41,67 @@ class EmployeeListView(ListView):
             )
         return queryset
 
-class EmployeeCreateView(CreateView):
+
+class EmployeeDetailView(PermissionRequiredMixin, EmployeeScopeMixin, DetailView):
+    permission_required = "employees.view_employee"
+    template_name = "employees/employee_detail.html"
+    context_object_name = "employee"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        employee = self.object
+        # Field-level security: the salary is only put in the context when
+        # this user is allowed to see it, so it cannot leak via the template.
+        if can_view_salary(self.request.user, employee):
+            context['salary_dollars'] = Decimal(employee.salary_cents) / 100
+        return context
+
+
+class MyProfileView(View):
+    """Shortcut to the logged-in user's own employee record."""
+
+    def get(self, request):
+        profile = getattr(request.user, "employee_profile", None)
+        if profile is None:
+            raise Http404("No employee profile is linked to this account.")
+        return redirect("employee_detail", pk=profile.pk)
+
+
+class EmployeeCreateView(PermissionRequiredMixin, CreateView):
+    permission_required = "employees.add_employee"
     model = Employee
     form_class = EmployeeForm
     template_name = "employees/employee_form.html"
     success_url = reverse_lazy("employee_list")
 
-class EmployeeUpdateView(UpdateView):
-    model = Employee
+
+class EmployeeUpdateView(PermissionRequiredMixin, EmployeeScopeMixin, UpdateView):
+    permission_required = "employees.change_employee"
     form_class = EmployeeForm
     template_name = "employees/employee_form.html"
     success_url = reverse_lazy("employee_list")
 
-class EmployeeDeleteView(DeleteView):
-    model = Employee
+
+class EmployeeDeleteView(PermissionRequiredMixin, EmployeeScopeMixin, DeleteView):
+    permission_required = "employees.delete_employee"
     template_name = "employees/employee_confirm_delete.html"
     success_url = reverse_lazy("employee_list")
 
 
 # ============ DEPARTMENT VIEWS ============
 
-class DepartmentListView(ListView):
+class DepartmentListView(PermissionRequiredMixin, ListView):
+    permission_required = "employees.view_department"
     model = Department
     template_name = "employees/department_list.html"
     context_object_name = "departments"
 
-    # Annotate the queryset with the employee count
     def get_queryset(self):
         return Department.objects.annotate(emp_count=Count('employees'))
 
-class DepartmentCreateView(CreateView):
+
+class DepartmentCreateView(PermissionRequiredMixin, CreateView):
+    permission_required = "employees.add_department"
     model = Department
     form_class = DepartmentForm
     template_name = "employees/department_form.html"
@@ -65,29 +110,25 @@ class DepartmentCreateView(CreateView):
 
 # ============ DASHBOARD REPORT ============
 
-class DashboardView(TemplateView):
+class DashboardView(PermissionRequiredMixin, TemplateView):
+    permission_required = "employees.view_reports"
     template_name = "employees/dashboard.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
-        # 1. Headcounts
+
         context['total_employees'] = Employee.objects.count()
         context['active_employees'] = Employee.objects.filter(status='active').count()
-        
-        # 2. Financials (Aggregation)
-        # This executes a single SQL query: SELECT SUM(salary_cents) FROM employee...
+
         payroll = Employee.objects.aggregate(total=Sum('salary_cents'))
         context['total_payroll_dollars'] = (payroll['total'] or 0) / 100
-        
+
         avg_salary = Employee.objects.aggregate(avg=Avg('salary_cents'))
         context['avg_salary_dollars'] = (avg_salary['avg'] or 0) / 100
 
-        # 3. Department Breakdown (GROUP BY)
-        # This joins departments and employees, groups by department, and counts/sums.
         context['departments'] = Department.objects.annotate(
             emp_count=Count('employees'),
             dept_payroll=Sum('employees__salary_cents')
         ).order_by('-emp_count')
-        
+
         return context

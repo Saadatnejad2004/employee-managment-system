@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 0 auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2>{{ employee.first_name }} {{ employee.last_name }}</h2>
+        <span class="status-badge status-{{ employee.status }}">{{ employee.get_status_display }}</span>
+    </div>
+
+    <div class="card" style="padding: 24px;">
+        <dl class="detail-list">
+            <dt>Job title</dt><dd>{{ employee.job_title }}</dd>
+            <dt>Department</dt><dd>{{ employee.department.name }}</dd>
+            <dt>Email</dt><dd>{{ employee.email }}</dd>
+            <dt>Phone</dt><dd>{{ employee.phone|default:"—" }}</dd>
+            <dt>Date hired</dt><dd>{{ employee.date_hired }}</dd>
+            {% if salary_dollars is not None %}
+                <dt>Salary</dt><dd>${{ salary_dollars|floatformat:"2g" }}</dd>
+            {% endif %}
+        </dl>
+    </div>
+
+    <div style="display: flex; gap: 10px; margin-top: 24px;">
+        {% if perms.employees.change_employee %}
+            <a href="{% url 'employee_update' employee.pk %}" class="btn btn-primary">Edit</a>
+        {% endif %}
+        {% if perms.employees.view_all_employees or perms.employees.view_department_employees %}
+            <a href="{% url 'employee_list' %}" class="btn btn-ghost">Back to list</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -11,10 +11,30 @@
     <nav class="navbar">
         <h1>EMS Dashboard</h1>
         <div class="nav-links">
-            <a href="{% url 'dashboard' %}">Dashboard</a>
-            <a href="{% url 'employee_list' %}">Employees</a>
-            <a href="{% url 'department_list' %}">Departments</a>
-            <a href="{% url 'admin:index' %}" target="_blank">Admin Panel</a>
+            {% if user.is_authenticated %}
+                {% if perms.employees.view_reports %}
+                    <a href="{% url 'dashboard' %}">Dashboard</a>
+                {% endif %}
+                {% if perms.employees.view_employee %}
+                    <a href="{% url 'employee_list' %}">Employees</a>
+                {% endif %}
+                {% if perms.employees.view_department %}
+                    <a href="{% url 'department_list' %}">Departments</a>
+                {% endif %}
+                {% if user.employee_profile %}
+                    <a href="{% url 'my_profile' %}">My Profile</a>
+                {% endif %}
+                {% if user.is_staff %}
+                    <a href="{% url 'admin:index' %}" target="_blank" rel="noopener">Admin Panel</a>
+                {% endif %}
+
+                <span class="nav-user">{{ user.get_username }}</span>
+                <!-- Logout must be a POST (CSRF-protected) since Django 5.0 -->
+                <form method="post" action="{% url 'logout' %}" class="nav-form">
+                    {% csrf_token %}
+                    <button type="submit" class="link-button">Log out</button>
+                </form>
+            {% endif %}
         </div>
     </nav>
     <div class="container">

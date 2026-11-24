@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load money %}
 
 {% block content %}
 <div style="max-width: 600px; margin: 0 auto;">
@@ -14,8 +15,8 @@
             <dt>Email</dt><dd>{{ employee.email }}</dd>
             <dt>Phone</dt><dd>{{ employee.phone|default:"—" }}</dd>
             <dt>Date hired</dt><dd>{{ employee.date_hired }}</dd>
-            {% if salary_dollars is not None %}
-                <dt>Salary</dt><dd>${{ salary_dollars|floatformat:"2g" }}</dd>
+            {% if salary_cents is not None %}
+                <dt>Salary</dt><dd>{{ salary_cents|money }}</dd>
             {% endif %}
         </dl>
     </div>

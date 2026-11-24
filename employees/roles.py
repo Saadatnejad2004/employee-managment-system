@@ -13,13 +13,22 @@ EMPLOYEE = "Employee"
 ROLE_PERMISSIONS = {
     # Full control of people data, salaries, departments and reports.
     HR_ADMIN: [
-        "view_employee", "add_employee", "change_employee", "delete_employee",
-        "view_all_employees", "view_salary", "view_reports",
-        "view_department", "add_department", "change_department", "delete_department",
+        "view_employee",
+        "add_employee",
+        "change_employee",
+        "delete_employee",
+        "view_all_employees",
+        "view_salary",
+        "view_reports",
+        "view_department",
+        "add_department",
+        "change_department",
+        "delete_department",
     ],
     # Read-only access to people in their own department. No salaries, no reports.
     MANAGER: [
-        "view_employee", "view_department_employees",
+        "view_employee",
+        "view_department_employees",
     ],
     # Read-only access to their own profile (including their own salary).
     EMPLOYEE: [

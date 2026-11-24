@@ -26,6 +26,8 @@ class Command(BaseCommand):
             group, created = Group.objects.get_or_create(name=role)
             group.permissions.set(permissions)  # idempotent: exact match, no leftovers
             self.stdout.write(
-                self.style.SUCCESS(f"{'Created' if created else 'Updated'} role '{role}' "
-                                   f"({permissions.count()} permissions)")
+                self.style.SUCCESS(
+                    f"{'Created' if created else 'Updated'} role '{role}' "
+                    f"({permissions.count()} permissions)"
+                )
             )

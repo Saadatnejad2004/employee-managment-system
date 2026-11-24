@@ -1,18 +1,24 @@
-from decimal import Decimal
-
+from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.mixins import PermissionRequiredMixin
-from django.db.models import Avg, Count, Q, Sum
-from django.http import Http404
+from django.db import OperationalError, connection
+from django.db.models import Count, Q
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import (
-    CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView,
+    CreateView,
+    DeleteView,
+    DetailView,
+    ListView,
+    TemplateView,
+    UpdateView,
 )
 
 from .forms import DepartmentForm, EmployeeForm
 from .models import Department, Employee
 from .permissions import EmployeeScopeMixin, can_view_salary
+from .reports import PAYABLE_STATUSES, company_summary, department_breakdown
 
 # Authentication ("are you logged in?") is enforced globally by
 # LoginRequiredMiddleware. Everything below is AUTHORIZATION:
@@ -20,6 +26,7 @@ from .permissions import EmployeeScopeMixin, can_view_salary
 #   EmployeeScopeMixin      -> which employee rows may they touch?   (404)
 
 # ============ EMPLOYEE VIEWS ============
+
 
 class EmployeeListView(PermissionRequiredMixin, EmployeeScopeMixin, ListView):
     permission_required = "employees.view_employee"
@@ -29,15 +36,16 @@ class EmployeeListView(PermissionRequiredMixin, EmployeeScopeMixin, ListView):
 
     def get_queryset(self):
         # Scoped (and select_related) queryset from EmployeeScopeMixin.
-        queryset = super().get_queryset().order_by('-date_hired', 'last_name')
+        queryset = super().get_queryset().order_by("-date_hired", "last_name", "pk")
 
-        query = self.request.GET.get('q')
-        if query:
+        # "john smith" must match first_name=John AND last_name=Smith, so
+        # every word has to match at least one field (AND of ORs).
+        for term in (self.request.GET.get("q") or "").split():
             queryset = queryset.filter(
-                Q(first_name__icontains=query) |
-                Q(last_name__icontains=query) |
-                Q(email__icontains=query) |
-                Q(job_title__icontains=query)
+                Q(first_name__icontains=term)
+                | Q(last_name__icontains=term)
+                | Q(email__icontains=term)
+                | Q(job_title__icontains=term)
             )
         return queryset
 
@@ -53,7 +61,7 @@ class EmployeeDetailView(PermissionRequiredMixin, EmployeeScopeMixin, DetailView
         # Field-level security: the salary is only put in the context when
         # this user is allowed to see it, so it cannot leak via the template.
         if can_view_salary(self.request.user, employee):
-            context['salary_dollars'] = Decimal(employee.salary_cents) / 100
+            context["salary_cents"] = employee.salary_cents
         return context
 
 
@@ -90,6 +98,7 @@ class EmployeeDeleteView(PermissionRequiredMixin, EmployeeScopeMixin, DeleteView
 
 # ============ DEPARTMENT VIEWS ============
 
+
 class DepartmentListView(PermissionRequiredMixin, ListView):
     permission_required = "employees.view_department"
     model = Department
@@ -97,7 +106,9 @@ class DepartmentListView(PermissionRequiredMixin, ListView):
     context_object_name = "departments"
 
     def get_queryset(self):
-        return Department.objects.annotate(emp_count=Count('employees'))
+        return Department.objects.annotate(
+            emp_count=Count("employees", filter=Q(employees__status__in=PAYABLE_STATUSES))
+        ).order_by("name")
 
 
 class DepartmentCreateView(PermissionRequiredMixin, CreateView):
@@ -110,25 +121,26 @@ class DepartmentCreateView(PermissionRequiredMixin, CreateView):
 
 # ============ DASHBOARD REPORT ============
 
+
 class DashboardView(PermissionRequiredMixin, TemplateView):
     permission_required = "employees.view_reports"
     template_name = "employees/dashboard.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-
-        context['total_employees'] = Employee.objects.count()
-        context['active_employees'] = Employee.objects.filter(status='active').count()
-
-        payroll = Employee.objects.aggregate(total=Sum('salary_cents'))
-        context['total_payroll_dollars'] = (payroll['total'] or 0) / 100
-
-        avg_salary = Employee.objects.aggregate(avg=Avg('salary_cents'))
-        context['avg_salary_dollars'] = (avg_salary['avg'] or 0) / 100
-
-        context['departments'] = Department.objects.annotate(
-            emp_count=Count('employees'),
-            dept_payroll=Sum('employees__salary_cents')
-        ).order_by('-emp_count')
-
+        context["summary"] = company_summary()  # 1 query
+        context["departments"] = department_breakdown()  # 1 query
         return context
+
+
+# ============ OPERATIONS ============
+
+
+@login_not_required
+def healthz(request):
+    """Liveness + database check for Docker / load balancers. Public, reveals nothing."""
+    try:
+        connection.ensure_connection()
+    except OperationalError:
+        return JsonResponse({"status": "database unavailable"}, status=503)
+    return JsonResponse({"status": "ok"})

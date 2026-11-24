@@ -1,0 +1,25 @@
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings_test"
+python_files = ["test_*.py"]
+addopts = "-ra --strict-markers --cov --cov-report=term-missing:skip-covered"
+# config.settings refuses to start without a secret key when DEBUG is off.
+# Tests talk plain http, so HTTPS redirects/secure cookies are switched off.
+env = ["DJANGO_SECRET_KEY=test-only-secret-key", "DJANGO_HTTPS=0"]
+
+[tool.coverage.run]
+source = ["employees", "config"]
+omit = ["*/migrations/*", "*/tests/*", "config/wsgi.py", "config/asgi.py", "config/settings_test.py"]
+
+[tool.coverage.report]
+fail_under = 90
+exclude_also = ["if __name__ == .__main__.:"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations", "venv", "staticfiles"]
+
+[tool.ruff.lint]
+# E/F: pycodestyle + pyflakes   I: import order   B: bugbear
+# UP: modern syntax             DJ: django-specific checks
+select = ["E", "F", "I", "B", "UP", "DJ"]

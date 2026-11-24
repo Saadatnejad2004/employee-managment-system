@@ -1,0 +1,8 @@
+-r requirements.txt
+pytest>=9
+pytest-django>=4.11
+pytest-env>=1.1
+pytest-cov>=6
+factory_boy>=3.3
+ruff>=0.14
+pre-commit>=4

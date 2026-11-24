@@ -65,7 +65,7 @@
 {% if is_paginated %}
 <div style="display: flex; justify-content: center; gap: 10px; margin-top: 24px;">
     {% if page_obj.has_previous %}
-        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" class="btn btn-ghost btn-sm">&laquo; Prev</a>
+        <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q|urlencode }}{% endif %}" class="btn btn-ghost btn-sm">&laquo; Prev</a>
     {% endif %}
 
     <span style="padding: 6px 12px; font-size: 0.9rem; color: var(--muted);">
@@ -73,7 +73,7 @@
     </span>
 
     {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" class="btn btn-ghost btn-sm">Next &raquo;</a>
+        <a href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q|urlencode }}{% endif %}" class="btn btn-ghost btn-sm">Next &raquo;</a>
     {% endif %}
 </div>
 {% endif %}

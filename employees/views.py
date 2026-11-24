@@ -1,11 +1,8 @@
 from django.contrib.auth.decorators import login_not_required
-from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db import OperationalError, connection
-from django.db.models import Count, Q
-from django.http import Http404, JsonResponse
-from django.shortcuts import redirect
+from django.db.models import Avg, Count, Q, Sum
+from django.http import JsonResponse
 from django.urls import reverse_lazy
-from django.views import View
 from django.views.generic import (
     CreateView,
     DeleteView,
@@ -17,81 +14,74 @@ from django.views.generic import (
 
 from .forms import DepartmentForm, EmployeeForm
 from .models import Department, Employee
-from .permissions import EmployeeScopeMixin, can_view_salary
-from .reports import PAYABLE_STATUSES, company_summary, department_breakdown
 
-# Authentication ("are you logged in?") is enforced globally by
-# LoginRequiredMiddleware. Everything below is AUTHORIZATION:
-#   PermissionRequiredMixin -> may this user use this screen at all? (403)
-#   EmployeeScopeMixin      -> which employee rows may they touch?   (404)
+# Authentication is enforced globally by LoginRequiredMiddleware.
+# We only handle view logic here.
 
 # ============ EMPLOYEE VIEWS ============
 
 
-class EmployeeListView(PermissionRequiredMixin, EmployeeScopeMixin, ListView):
-    permission_required = "employees.view_employee"
+class EmployeeListView(ListView):
+    model = Employee
     template_name = "employees/employee_list.html"
     context_object_name = "employees"
     paginate_by = 10
 
     def get_queryset(self):
-        # Scoped (and select_related) queryset from EmployeeScopeMixin.
-        queryset = super().get_queryset().order_by("-date_hired", "last_name", "pk")
-
-        # "john smith" must match first_name=John AND last_name=Smith, so
-        # every word has to match at least one field (AND of ORs).
-        for term in (self.request.GET.get("q") or "").split():
+        queryset = (
+            super().get_queryset().select_related("department").order_by("-date_hired", "last_name")
+        )
+        query = self.request.GET.get("q")
+        if query:
             queryset = queryset.filter(
-                Q(first_name__icontains=term)
-                | Q(last_name__icontains=term)
-                | Q(email__icontains=term)
-                | Q(job_title__icontains=term)
+                Q(first_name__icontains=query)
+                | Q(last_name__icontains=query)
+                | Q(email__icontains=query)
+                | Q(job_title__icontains=query)
             )
         return queryset
 
 
-class EmployeeDetailView(PermissionRequiredMixin, EmployeeScopeMixin, DetailView):
-    permission_required = "employees.view_employee"
+class EmployeeDetailView(DetailView):
+    model = Employee
     template_name = "employees/employee_detail.html"
     context_object_name = "employee"
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        employee = self.object
-        # Field-level security: the salary is only put in the context when
-        # this user is allowed to see it, so it cannot leak via the template.
-        if can_view_salary(self.request.user, employee):
-            context["salary_cents"] = employee.salary_cents
-        return context
+
+class MyProfileView(DetailView):
+    model = Employee
+    template_name = "employees/my_profile.html"
+    context_object_name = "employee"
+
+    def get_object(self, queryset=None):
+        # Assuming you link the User to the Employee via email (or a user field)
+        # If you added a `user = models.OneToOneField(User)` to your Employee model,
+        # change this to `return self.request.user.employee`
+        employee = Employee.objects.filter(email=self.request.user.email).first()
+        if not employee:
+            # Fallback if no employee record exists for this user
+            from django.http import Http404
+
+            raise Http404("No Employee profile found for this user.")
+        return employee
 
 
-class MyProfileView(View):
-    """Shortcut to the logged-in user's own employee record."""
-
-    def get(self, request):
-        profile = getattr(request.user, "employee_profile", None)
-        if profile is None:
-            raise Http404("No employee profile is linked to this account.")
-        return redirect("employee_detail", pk=profile.pk)
-
-
-class EmployeeCreateView(PermissionRequiredMixin, CreateView):
-    permission_required = "employees.add_employee"
+class EmployeeCreateView(CreateView):
     model = Employee
     form_class = EmployeeForm
     template_name = "employees/employee_form.html"
     success_url = reverse_lazy("employee_list")
 
 
-class EmployeeUpdateView(PermissionRequiredMixin, EmployeeScopeMixin, UpdateView):
-    permission_required = "employees.change_employee"
+class EmployeeUpdateView(UpdateView):
+    model = Employee
     form_class = EmployeeForm
     template_name = "employees/employee_form.html"
     success_url = reverse_lazy("employee_list")
 
 
-class EmployeeDeleteView(PermissionRequiredMixin, EmployeeScopeMixin, DeleteView):
-    permission_required = "employees.delete_employee"
+class EmployeeDeleteView(DeleteView):
+    model = Employee
     template_name = "employees/employee_confirm_delete.html"
     success_url = reverse_lazy("employee_list")
 
@@ -99,20 +89,16 @@ class EmployeeDeleteView(PermissionRequiredMixin, EmployeeScopeMixin, DeleteView
 # ============ DEPARTMENT VIEWS ============
 
 
-class DepartmentListView(PermissionRequiredMixin, ListView):
-    permission_required = "employees.view_department"
+class DepartmentListView(ListView):
     model = Department
     template_name = "employees/department_list.html"
     context_object_name = "departments"
 
     def get_queryset(self):
-        return Department.objects.annotate(
-            emp_count=Count("employees", filter=Q(employees__status__in=PAYABLE_STATUSES))
-        ).order_by("name")
+        return Department.objects.annotate(emp_count=Count("employees"))
 
 
-class DepartmentCreateView(PermissionRequiredMixin, CreateView):
-    permission_required = "employees.add_department"
+class DepartmentCreateView(CreateView):
     model = Department
     form_class = DepartmentForm
     template_name = "employees/department_form.html"
@@ -122,14 +108,24 @@ class DepartmentCreateView(PermissionRequiredMixin, CreateView):
 # ============ DASHBOARD REPORT ============
 
 
-class DashboardView(PermissionRequiredMixin, TemplateView):
-    permission_required = "employees.view_reports"
+class DashboardView(TemplateView):
     template_name = "employees/dashboard.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["summary"] = company_summary()  # 1 query
-        context["departments"] = department_breakdown()  # 1 query
+        context["total_employees"] = Employee.objects.count()
+        context["active_employees"] = Employee.objects.filter(status="active").count()
+
+        payroll = Employee.objects.aggregate(total=Sum("salary_cents"))
+        context["total_payroll_dollars"] = (payroll["total"] or 0) / 100
+
+        avg_salary = Employee.objects.aggregate(avg=Avg("salary_cents"))
+        context["avg_salary_dollars"] = (avg_salary["avg"] or 0) / 100
+
+        context["departments"] = Department.objects.annotate(
+            emp_count=Count("employees"), dept_payroll=Sum("employees__salary_cents")
+        ).order_by("-emp_count")
+
         return context
 
 
@@ -138,7 +134,7 @@ class DashboardView(PermissionRequiredMixin, TemplateView):
 
 @login_not_required
 def healthz(request):
-    """Liveness + database check for Docker / load balancers. Public, reveals nothing."""
+    """Liveness + database check for Docker / load balancers."""
     try:
         connection.ensure_connection()
     except OperationalError:

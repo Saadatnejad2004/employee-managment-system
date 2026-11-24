@@ -1,33 +1,40 @@
 {% extends 'base.html' %}
-{% load money %}
-
 {% block content %}
-<div style="max-width: 600px; margin: 0 auto;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h2>{{ employee.first_name }} {{ employee.last_name }}</h2>
-        <span class="status-badge status-{{ employee.status }}">{{ employee.get_status_display }}</span>
-    </div>
-
-    <div class="card" style="padding: 24px;">
-        <dl class="detail-list">
-            <dt>Job title</dt><dd>{{ employee.job_title }}</dd>
-            <dt>Department</dt><dd>{{ employee.department.name }}</dd>
-            <dt>Email</dt><dd>{{ employee.email }}</dd>
-            <dt>Phone</dt><dd>{{ employee.phone|default:"—" }}</dd>
-            <dt>Date hired</dt><dd>{{ employee.date_hired }}</dd>
-            {% if salary_cents is not None %}
-                <dt>Salary</dt><dd>{{ salary_cents|money }}</dd>
-            {% endif %}
-        </dl>
-    </div>
-
-    <div style="display: flex; gap: 10px; margin-top: 24px;">
-        {% if perms.employees.change_employee %}
-            <a href="{% url 'employee_update' employee.pk %}" class="btn btn-primary">Edit</a>
-        {% endif %}
-        {% if perms.employees.view_all_employees or perms.employees.view_department_employees %}
-            <a href="{% url 'employee_list' %}" class="btn btn-ghost">Back to list</a>
-        {% endif %}
+<div class="max-w-3xl mx-auto">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+        <div class="flex justify-between items-start mb-6">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900">{{ employee.first_name }} {{ employee.last_name }}</h2>
+                <p class="text-gray-500">{{ employee.job_title }} at {{ employee.department.name }}</p>
+            </div>
+            <a href="{% url 'employee_list' %}" class="text-indigo-600 hover:text-indigo-800 font-medium">&larr; Back to List</a>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-6 pt-6 border-t border-gray-100">
+            <div>
+                <p class="text-sm text-gray-500 font-medium">Email</p>
+                <p class="text-gray-900 font-medium">{{ employee.email }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 font-medium">Phone</p>
+                <p class="text-gray-900 font-medium">{{ employee.phone|default:"—" }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 font-medium">Date Hired</p>
+                <p class="text-gray-900 font-medium">{{ employee.date_hired|date:"M d, Y" }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 font-medium">Status</p>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if employee.status == 'active' %}bg-green-100 text-green-800{% elif employee.status == 'on_leave' %}bg-yellow-100 text-yellow-800{% else %}bg-red-100 text-red-800{% endif %}">
+                    {{ employee.get_status_display }}
+                </span>
+            </div>
+        </div>
+        
+        <div class="mt-8 pt-6 border-t border-gray-100 flex justify-end gap-3">
+            <a href="{% url 'employee_update' employee.pk %}" class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition">Edit</a>
+            <a href="{% url 'employee_delete' employee.pk %}" class="bg-red-50 text-red-600 px-4 py-2 rounded-lg font-medium hover:bg-red-100 transition">Delete</a>
+        </div>
     </div>
 </div>
 {% endblock %}

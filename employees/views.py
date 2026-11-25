@@ -1,7 +1,9 @@
+from django.contrib.auth import login
 from django.contrib.auth.decorators import login_not_required
 from django.db import OperationalError, connection
 from django.db.models import Avg, Count, Q, Sum
 from django.http import JsonResponse
+from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.views.generic import (
     CreateView,
@@ -12,11 +14,28 @@ from django.views.generic import (
     UpdateView,
 )
 
-from .forms import DepartmentForm, EmployeeForm
+from .forms import DepartmentForm, EmployeeForm, UserRegisterForm
 from .models import Department, Employee
 
-# Authentication is enforced globally by LoginRequiredMiddleware.
-# We only handle view logic here.
+# ============ AUTHENTICATION ============
+
+
+@login_not_required
+def register(request):
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        form = UserRegisterForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            login(request, user)
+            return redirect("dashboard")
+    else:
+        form = UserRegisterForm()
+
+    return render(request, "register.html", {"form": form})
+
 
 # ============ EMPLOYEE VIEWS ============
 
@@ -48,22 +67,15 @@ class EmployeeDetailView(DetailView):
     context_object_name = "employee"
 
 
-class MyProfileView(DetailView):
-    model = Employee
+class MyProfileView(TemplateView):
     template_name = "employees/my_profile.html"
-    context_object_name = "employee"
 
-    def get_object(self, queryset=None):
-        # Assuming you link the User to the Employee via email (or a user field)
-        # If you added a `user = models.OneToOneField(User)` to your Employee model,
-        # change this to `return self.request.user.employee`
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Try to find an employee matching the user's email
         employee = Employee.objects.filter(email=self.request.user.email).first()
-        if not employee:
-            # Fallback if no employee record exists for this user
-            from django.http import Http404
-
-            raise Http404("No Employee profile found for this user.")
-        return employee
+        context["employee"] = employee
+        return context
 
 
 class EmployeeCreateView(CreateView):

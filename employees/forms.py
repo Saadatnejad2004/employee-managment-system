@@ -1,12 +1,37 @@
 from django import forms
+from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.models import User
 
 from .models import Department, Employee
 
 INPUT_CLASSES = (
     "w-full px-4 py-2.5 rounded-lg border border-gray-300 "
     "focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 "
-    "outline-none transition"
+    "outline-none transition bg-white"
 )
+
+
+class UserRegisterForm(UserCreationForm):
+    email = forms.EmailField(
+        required=True,
+        widget=forms.EmailInput(attrs={"class": INPUT_CLASSES, "placeholder": "name@example.com"}),
+    )
+
+    class Meta:
+        model = User
+        fields = ["username", "email"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["username"].widget.attrs.update(
+            {"class": INPUT_CLASSES, "placeholder": "Choose a username"}
+        )
+        self.fields["password1"].widget.attrs.update(
+            {"class": INPUT_CLASSES, "placeholder": "Create a password"}
+        )
+        self.fields["password2"].widget.attrs.update(
+            {"class": INPUT_CLASSES, "placeholder": "Confirm password"}
+        )
 
 
 class EmployeeForm(forms.ModelForm):

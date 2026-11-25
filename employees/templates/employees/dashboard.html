@@ -1,45 +1,60 @@
 {% extends 'base.html' %}
-{% load money %}
-
 {% block content %}
-<h2>Employee Reports Dashboard</h2>
+<div class="mb-8">
+    <h2 class="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
+    <p class="text-gray-500 text-sm mt-1">Company-wide metrics and department breakdown.</p>
+</div>
 
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 24px 0;">
-    <div class="card" style="padding: 20px;">
-        <p style="color: var(--muted); font-size: 0.85rem; font-weight: 600; margin: 0;">CURRENT HEADCOUNT</p>
-        <h3 style="font-size: 2rem; margin: 8px 0;">{{ summary.headcount }}</h3>
-        <p style="color: var(--success); font-size: 0.85rem; margin: 0;">{{ summary.active }} Active</p>
+<!-- KPI Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <p class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Total Headcount</p>
+        <h3 class="text-3xl font-extrabold text-gray-900">{{ total_employees }}</h3>
+        <p class="text-sm text-green-600 font-medium mt-1">{{ active_employees }} Active</p>
+    </div>
+    
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <p class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Monthly Payroll</p>
+        <h3 class="text-3xl font-extrabold text-gray-900">${{ total_payroll_dollars|floatformat:"2g" }}</h3>
+        <p class="text-sm text-gray-500 mt-1">Total salary allocation</p>
     </div>
 
-    <div class="card" style="padding: 20px;">
-        <p style="color: var(--muted); font-size: 0.85rem; font-weight: 600; margin: 0;">ANNUAL PAYROLL</p>
-        <h3 style="font-size: 2rem; margin: 8px 0;">{{ summary.payroll_cents|money }}</h3>
-        <p style="color: var(--muted); font-size: 0.85rem; margin: 0;">Avg: {{ summary.avg_salary_cents|money }}</p>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <p class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Average Salary</p>
+        <h3 class="text-3xl font-extrabold text-gray-900">${{ avg_salary_dollars|floatformat:"2g" }}</h3>
+        <p class="text-sm text-gray-500 mt-1">Across all departments</p>
+    </div>
+    
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <p class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Departments</p>
+        <h3 class="text-3xl font-extrabold text-gray-900">{{ departments.count }}</h3>
+        <p class="text-sm text-gray-500 mt-1">Active divisions</p>
     </div>
 </div>
 
-<div class="card">
-    <div style="padding: 20px; border-bottom: 1px solid var(--border);">
-        <h3 style="margin: 0; font-size: 1.1rem;">Department Breakdown</h3>
+<!-- Department Breakdown -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-200 bg-gray-50">
+        <h3 class="text-lg font-bold text-gray-900">Department Breakdown</h3>
     </div>
-    <table class="table">
+    <table class="w-full text-left border-collapse">
         <thead>
-            <tr>
-                <th>Department</th>
-                <th>Headcount</th>
-                <th>Total Payroll</th>
+            <tr class="text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                <th class="px-6 py-4">Department</th>
+                <th class="px-6 py-4">Headcount</th>
+                <th class="px-6 py-4 text-right">Payroll Allocation</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody class="divide-y divide-gray-100">
             {% for dept in departments %}
-            <tr>
-                <td><strong>{{ dept.name }}</strong></td>
-                <td>{{ dept.emp_count }} staff</td>
-                <td>{{ dept.dept_payroll|money }}</td>
+            <tr class="hover:bg-gray-50 transition">
+                <td class="px-6 py-4 font-medium text-gray-900">{{ dept.name }}</td>
+                <td class="px-6 py-4 text-sm text-gray-700">{{ dept.emp_count }} staff</td>
+                <td class="px-6 py-4 text-right text-sm font-medium text-gray-900">${{ dept.dept_payroll|default:0|floatformat:"2g" }}</td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="3" style="text-align: center; padding: 32px;">No departments found.</td>
+                <td colspan="3" class="px-6 py-12 text-center text-gray-500">No department data available.</td>
             </tr>
             {% endfor %}
         </tbody>
